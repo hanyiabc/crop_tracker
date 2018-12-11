@@ -2,4 +2,5 @@ build/
 bin/
 lib/
 debug/
-nbproject/
+output/
+CRBD/*
