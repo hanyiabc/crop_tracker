@@ -26,16 +26,17 @@ void skeletonize(Mat &m);
 void houghTransform(Mat &m);
 void filterSimLines(vector<Vec4i> &lines);
 double solveforB(const Vec4i & twoPts);
+cv::Vec2d twoPoints2Polar(const cv::Vec4i &line);
 
-const int HOUGH_RHO = 2;					  //Distance resolution of the accumulator in pixels
+const int HOUGH_RHO = 2;				 //Distance resolution of the accumulator in pixels
 const double HOUGH_ANGLE = CV_PI / 45.0; //Angle resolution of the accumulator in radians --------- 4 degrees
 const int HOUGH_THRESH_MAX = 100;			  //Accumulator threshold parameter.Only those lines are returned that get enough votes
 const int HOUGH_THRESH_MIN = 10;
 const int HOUGH_THRESH_INCR = 1;
 const int NUMBER_OF_ROWS = 5;						 //how many crop rows to detect
 const double THETA_SIM_THRESH = CV_PI / 30.0; //How similar two rows can be ----- 6 degrees
-const int RHO_SIM_THRESH = 100;						 //How similar two rows can be
-const double ANGLE_THRESH = CV_PI / 6.0;	//How steep angles the crop rows can be in radians -------- 30 degrees
+const int RHO_SIM_THRESH = 8;						 //How similar two rows can be
+const double ANGLE_THRESH = CV_PI / 5.0;	//How steep angles the crop rows can be in radians -------- 30 degrees
 const string FILE_NAME = "crop_row_013.JPG";
 
 int main(int argc, char const *argv[])
@@ -129,19 +130,9 @@ void houghTransform(Mat &m)
 	{
 		lines.clear();
 		filteredLines.clear();
-		cv::HoughLinesP(m, lines, HOUGH_RHO, HOUGH_ANGLE, hough_thresh, 0, 10);
-		for (size_t i = 0; i < lines.size(); i++)
-		{
-			double xCor = lines[i][2] - lines[i][0];
-			double yCor = lines[i][3] - lines[i][1];
-			double angle = atan(abs(xCor / yCor));
-			if (- ANGLE_THRESH < angle && angle < ANGLE_THRESH)
-			{		
-				filteredLines.push_back(cv::Vec4i(lines[i]));
-			}
-		}
-
-		filterSimLines(filteredLines);
+		cv::HoughLinesP(m, lines, HOUGH_RHO, HOUGH_ANGLE, hough_thresh, 2, 50);
+		
+		filterSimLines(lines);
 
 		hough_thresh -= HOUGH_THRESH_INCR;
 		if(filteredLines.size() >= NUMBER_OF_ROWS)
@@ -154,9 +145,9 @@ void houghTransform(Mat &m)
 	cv::cvtColor(m, temp, cv::COLOR_GRAY2BGR);
 
 
-	for (size_t i = 0; i < filteredLines.size(); i++)
+	for (size_t i = 0; i < lines.size(); i++)
 	{
-		cv::line(temp, cv::Point(filteredLines[i][0], filteredLines[i][1]), cv::Point(filteredLines[i][2], filteredLines[i][3]), cv::Scalar(0, 0, 255), 3, 8);
+		cv::line(temp, cv::Point(lines[i][0], lines[i][1]), cv::Point(lines[i][2], lines[i][3]), cv::Scalar(0, 0, 255), 3, 8);
 	}
 	imshow("Detected Lines", temp);
 	waitKey(0);
@@ -174,31 +165,64 @@ double solveforB(const Vec4i &twoPts)
 
 void filterSimLines(vector<Vec4i> &lines)
 {
-	for (size_t i = lines.size() - 1; i > 0; i--)
+	if (!lines.empty())
 	{
-		double xCor = lines[i][2] - lines[i][0];
-		double yCor = lines[i][3] - lines[i][1];
-		double angle = atan(abs(xCor / yCor));
-		double b1 = solveforB(lines[i]);
-		for (size_t j = 0; j < lines.size(); j++)
+		for (size_t i = lines.size() - 1; i > 0; i--)
 		{
-			if(j != i)
+			auto rhoTheta = twoPoints2Polar(lines[i]);
+			if ( ( (ANGLE_THRESH < rhoTheta[1]) && (rhoTheta[1] < CV_PI - ANGLE_THRESH) || (-ANGLE_THRESH > rhoTheta[1]) && (rhoTheta[1] > ANGLE_THRESH - CV_PI) ) || abs(rhoTheta[1]) <= 0.0001)
 			{
-				xCor = lines[j][2] - lines[j][0];
-				yCor = lines[j][3] - lines[j][1];
-
-				double angle2 = atan(abs(xCor / yCor));
-				if (abs(angle - angle2) < THETA_SIM_THRESH)
-				{
-					double b2 = solveforB(lines[j]);
-					if (abs(b1 - b2) < RHO_SIM_THRESH)
-					{
-						lines.erase(lines.begin() + i);
-						break;
-					}
-				}
+				lines.erase(lines.begin() + i);
 			}
-			
+			else
+			{
+				for (size_t j = 0; j < lines.size(); j++)
+				{
+
+					if (j != i)
+					{
+						auto rhoTheta2 = twoPoints2Polar(lines[j]);
+						if (abs(rhoTheta[1] - rhoTheta2[1]) < THETA_SIM_THRESH)
+						{
+							lines.erase(lines.begin() + i);
+							break;
+						}
+						else if (abs(rhoTheta[0] - rhoTheta2[0]) < RHO_SIM_THRESH)
+						{
+							lines.erase(lines.begin() + i);
+							break;
+						}
+					}
+
+				}
+
+			}
+
 		}
 	}
+	
+}
+
+cv::Vec2d twoPoints2Polar(const cv::Vec4i &line)
+{
+	// Get points from the vector
+	cv::Point2f p1(line[0], line[1]);
+	cv::Point2f p2(line[2], line[3]);
+
+	// Compute 'rho' and 'theta'
+	double rho = abs(p2.x * p1.y - p2.y * p1.x) / cv::norm(p2 - p1);
+	double theta = -atan2((p2.x - p1.x), (p2.y - p1.y));
+
+	// You can have a negative distance from the center
+	// when the angle is negative
+	if (theta < 0)
+	{
+		rho = -rho;
+	}
+
+	//if (theta < 0)
+	//{
+	//	theta = 2 * CV_PI + theta;
+	//}
+	return cv::Vec2d(rho, theta);
 }
