@@ -133,20 +133,20 @@ void cropRowDetec(Mat &m)
 	}
 
 	//my code
-	double xCoord[((int)lines.size()/2) + 1];
+	double xCoord[lines.size() - 1];
 	int b = 0;
-	for(int a = 0; a < ((int)lines.size()/2)+1; a++)
+	for(int a = 0; a < lines.size()-1; a++)
 	{
 		xCoord[a] = intersection(points[b],points[b+1],points[b+2],points[b+3]);
 		b += 2;
 	} 
 
 	double sum = 0;
-	for(int k = 0; k < ((int)lines.size()/2)+1;k++)
+	for(int k = 0; k < lines.size()-1;k++)
 	{
 		sum += xCoord[k];
 	}
-	double xAvg = sum/(((int)lines.size()/2)+1);
+	double xAvg = sum/(lines.size()-1);
 	cv::Point pt3, pt4;
 	pt3.x =xAvg;
 	pt4.x = xAvg;
