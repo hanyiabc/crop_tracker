@@ -30,6 +30,8 @@ vector<cv::Vec2f> houghTransform(Mat &m);
 void filterSimLines(vector<Vec2f> &lines);
 double solveforB(const Vec2f & twoPts);
 cv::Vec2d twoPoints2Polar(const cv::Vec4i &line);
+double intersection(const cv::Point2f p1, const cv::Point2f p2, const cv::Point2f p3, const cv::Point2f p4);
+//double average(Mat &m);
 
 const int HOUGH_RHO = 2;				 //Distance resolution of the accumulator in pixels
 const double HOUGH_ANGLE = CV_PI / 45.0; //Angle resolution of the accumulator in radians --------- 4 degrees
@@ -105,6 +107,12 @@ void cropRowDetec(Mat &m)
 	}
 		
 	auto lines = houghTransform(m);
+
+	//my code
+	int j = 0;
+	cv::Point2f points[lines.size()*2];
+	//end my code 
+
 	for (size_t i = 0; i < lines.size(); i++)
 	{
 		float rho = lines[i][0], theta = lines[i][1];
@@ -116,7 +124,38 @@ void cropRowDetec(Mat &m)
 		pt2.x = cvRound(x0 - 1000 * (-b));
 		pt2.y = cvRound(y0 - 1000 * (a));
 		cv::line(original, pt1, pt2, Scalar(0, 0, 255), 3, CV_AA);
+	
+		//my code
+		points[j] = pt1;
+		points[j+1] = pt2;
+		j += 2;
+		//end my code
 	}
+
+	//my code
+	double xCoord[((int)lines.size()/2) + 1];
+	int b = 0;
+	for(int a = 0; a < ((int)lines.size()/2)+1; a++)
+	{
+		xCoord[a] = intersection(points[b],points[b+1],points[b+2],points[b+3]);
+		b += 2;
+	} 
+
+	double sum = 0;
+	for(int k = 0; k < ((int)lines.size()/2)+1;k++)
+	{
+		sum += xCoord[k];
+	}
+	double xAvg = sum/(((int)lines.size()/2)+1);
+	cv::Point pt3, pt4;
+	pt3.x =xAvg;
+	pt4.x = xAvg;
+	pt3.y = 0;
+	pt4.y = 100;
+	cv::line(original, pt3, pt4, Scalar(0, 0, 255), 3, CV_AA);
+	cout << "The average x coordinate intersection is: " << xAvg << std::endl;
+	//end my code
+
 	m = original;
 	if (DEBUGGING)
 	{
@@ -134,7 +173,7 @@ void grayTransform(Mat &m)
 		{
 			
 			Vec3b bgr = m.at<Vec3b>(i, j);
-			auto GVal = 2 * bgr[1] - bgr[0] - bgr[1];
+			auto GVal = 2 * bgr[1] - bgr[0] - bgr[2];
 			m.at<Vec3b>(i, j)[0] = GVal;
 			m.at<Vec3b>(i, j)[1] = GVal;
 			m.at<Vec3b>(i, j)[2] = GVal;
@@ -284,3 +323,52 @@ cv::Vec2d twoPoints2Polar(const cv::Vec4i &line)
 	//}
 	return cv::Vec2d(rho, theta);
 }
+
+//start my code
+double intersection(const cv::Point2f p1, const cv::Point2f p2, const cv::Point2f p3, const cv::Point2f p4)
+{
+	double slope1 = (p1.y-p2.y)/(p1.x-p2.x);
+	double slope2 = (p3.y-p4.y)/(p3.x-p4.x);
+
+	double xCoord = ((p3.y-p1.y) + (slope1*p1.x) - (slope2*p3.x))/(slope1-slope2);
+	return xCoord;
+}
+//end my code
+
+/*
+double average(Mat &m)
+{
+	int j = 0;
+	auto lines = houghTransform(m);
+	cv::Point2f points[lines.size()*2];
+	for (size_t i = 0; i < lines.size(); i++)
+	{
+		float rho = lines[i][0], theta = lines[i][1];
+		cv::Point pt1, pt2;
+		double a = cos(theta), b = sin(theta);
+		double x0 = a * rho, y0 = b * rho;
+		pt1.x = cvRound(x0 + 1000 * (-b));
+		pt1.y = cvRound(y0 + 1000 * (a));
+		pt2.x = cvRound(x0 - 1000 * (-b));
+		pt2.y = cvRound(y0 - 1000 * (a));
+		
+		points[j] = pt1;
+		points[j+1] = pt2;
+		j += 2;
+	}
+	double xCoord[lines.size()/4];
+	int b = 0;
+	for(int a = 0; a < lines.size()/4; a++)
+	{
+		xCoord[a] = intersection(points[b],points[b+1],points[b+2],points[b+3]);
+		b += 4;
+	} 
+	double sum = 0;
+	for(int k = 0; k < lines.size()/4;k++)
+	{
+		sum += xCoord[k];
+	}
+	double xAvg = sum/lines.size()/4;
+	return xAvg;
+}
+*/
